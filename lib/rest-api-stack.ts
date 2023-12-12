@@ -6,7 +6,7 @@ import * as custom from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { generateBatch } from "../shared/util";
-import { movies, movieCasts } from "../seed/movies";
+import { movies, movieCasts, movieReviews } from "../seed/movies";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 
 export class RestAPIStack extends cdk.Stack {
@@ -27,6 +27,13 @@ export class RestAPIStack extends cdk.Stack {
       sortKey: { name: "actorName", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "MovieCast",
+    });
+
+    const movieReviewsTable = new dynamodb.Table(this, "MovieReviewsTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "MovieReview",
     });
 
     movieCastsTable.addLocalSecondaryIndex({
@@ -51,6 +58,22 @@ export class RestAPIStack extends cdk.Stack {
         },
       }
     );
+
+    const getReviewByIdFn = new lambdanode.NodejsFunction(
+      this,
+      "GetReviewsByIdFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambdas/getReviewById.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: movieReviewsTable.tableName,
+          REGION: 'eu-west-1',
+        },
+      }
+      );
 
     const getAllMoviesFn = new lambdanode.NodejsFunction(
       this,
@@ -110,12 +133,29 @@ export class RestAPIStack extends cdk.Stack {
       }
     );
 
+    const addMovieReviewsFn = new lambdanode.NodejsFunction(
+      this,
+      "AddMovieReviewsFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambdas/addMovieReviews.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: movieReviewsTable.tableName,
+          REGION: "eu-west-1",
+        },
+      }
+    );
+
     new custom.AwsCustomResource(this, "moviesddbInitData", {
       onCreate: {
         service: "DynamoDB",
         action: "batchWriteItem",
         parameters: {
           RequestItems: {
+            [movieReviewsTable.tableName]: generateBatch(movieReviews),
             [moviesTable.tableName]: generateBatch(movies),
             [movieCastsTable.tableName]: generateBatch(movieCasts),  // Added
           },
@@ -123,7 +163,7 @@ export class RestAPIStack extends cdk.Stack {
         physicalResourceId: custom.PhysicalResourceId.of("moviesddbInitData"), //.of(Date.now().toString()),
       },
       policy: custom.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: [moviesTable.tableArn, movieCastsTable.tableArn],  // Includes movie cast
+        resources: [moviesTable.tableArn, movieCastsTable.tableArn, movieReviewsTable.tableArn],  // Includes movie cast
       }),
     });
 
@@ -134,6 +174,9 @@ export class RestAPIStack extends cdk.Stack {
     moviesTable.grantReadWriteData(deleteMovieFn)
     movieCastsTable.grantReadData(getMovieCastMembersFn);
     movieCastsTable.grantReadWriteData(getMovieByIdFn)
+    movieReviewsTable.grantReadWriteData(addMovieReviewsFn)
+    movieReviewsTable.grantReadWriteData(getReviewByIdFn)
+
     
     // REST API 
     const api = new apig.RestApi(this, "RestAPI", {
@@ -175,6 +218,15 @@ export class RestAPIStack extends cdk.Stack {
       "GET",
       new apig.LambdaIntegration(getMovieCastMembersFn, { proxy: true })
     );
+    const movieReviewsEndpoint = movieEndpoint.addResource("reviews");
+    movieReviewsEndpoint.addMethod(
+      "POST",
+      new apig.LambdaIntegration(addMovieReviewsFn, { proxy: true })
+    );
+    movieReviewsEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getReviewByIdFn, { proxy: true })
+    );  
 
   }
 }
