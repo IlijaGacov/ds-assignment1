@@ -1,15 +1,16 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";  // CHANGED
+
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 
-const ddbClient = new DynamoDBClient({ region: process.env.REGION });
+const ddbDocClient = createDDbDocClient();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // CHANGED
   try {
     // Print Event
     console.log("Event: ", event);
 
-    const commandOutput = await ddbClient.send(
+    const commandOutput = await ddbDocClient.send(
       new ScanCommand({
         TableName: process.env.TABLE_NAME,
       })
@@ -20,7 +21,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ Message: "Invalid movie Id" }),
+        body: JSON.stringify({ Message: "Invalid Request" }),
       };
     }
     const body = {
