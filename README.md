@@ -19,8 +19,6 @@ e.g.
 
 ![](./images/api1.png)
 
-![](./images/api1.png)
-
 ### Authentication..
 
 N/A
