@@ -3,26 +3,30 @@ import { MovieReview } from '../shared/types'
 export const movieReviews: MovieReview[] = [
   {
     movieId: 1234,
-    reviewerName: "John Doe",
+    reviewerName: "JDoe",
     reviewDate: "01/11/2023",
-    content: "Decent Movie."
+    content: "Decent Movie.",
+    reviewRating: 3
   },
   {
     movieId: 4567,
-    reviewerName: "Jeff Jahkani",
+    reviewerName: "JJahkani",
     reviewDate: "02/11/2023",
-    content: "The Movie was Great!"
+    content: "The Movie was Great!",
+    reviewRating: 5
   },
   {
     movieId: 2345,
-    reviewerName: "Catherine Fitzpatrick",
+    reviewerName: "CtnFtprk",
     reviewDate: "03/11/2023",
-    content: "I was expecting better."
+    content: "I was expecting better.",
+    reviewRating: 2
   },
   {
     movieId: 3456,
-    reviewerName: "Karen Healy",
+    reviewerName: "KarenHealy",
     reviewDate: "04/11/2023",
-    content: "Complete waste of my time."
+    content: "Complete waste of my time.",
+    reviewRating: 1
   }
 ];

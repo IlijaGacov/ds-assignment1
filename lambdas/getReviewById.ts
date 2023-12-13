@@ -1,6 +1,6 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput, GetCommand } from "@aws-sdk/lib-dynamodb";
 
 
 const ddbDocClient = createDDbDocClient();
@@ -10,6 +10,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
     console.log("Event: ", event);
     const parameters  = event?.pathParameters;
     const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
+    const reviewerName = parameters?.reviewerName;
+    const minRating = event?.queryStringParameters?.minRating;
 
     if (!movieId) {
       return {
@@ -21,17 +23,53 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
       };
     }
 
-    const commandInput = {
-      TableName: process.env.TABLE_NAME,
+    let queryInput: QueryCommandInput = {
+      TableName: process.env.TABLE_NAME!,
       KeyConditionExpression: "movieId = :m",
       ExpressionAttributeValues: {
         ":m": movieId,
       },
     };
 
+    if (reviewerName) {
+      queryInput = {
+        ...queryInput,
+        FilterExpression: "reviewerName = :name", // Filter if reviewerName exists
+        ExpressionAttributeValues: {
+          ...queryInput.ExpressionAttributeValues,
+          ":name": reviewerName,
+        },
+      };
+    }
+
+    if (minRating !== undefined && !isNaN(parseFloat(minRating))) {
+      queryInput = {
+        ...queryInput,
+        FilterExpression: "reviewRating >= :rating", 
+        ExpressionAttributeValues: {
+          ...queryInput.ExpressionAttributeValues,
+          ":rating": parseFloat(minRating),
+        },
+      };
+    }
+
     const commandOutput = await ddbDocClient.send(
-      new QueryCommand(commandInput)
+      new QueryCommand(queryInput)
       );
+
+      console.log("GetCommand response: ", commandOutput);
+      if (!commandOutput.Items) {
+        return {
+          statusCode: 404,
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ Message: "No reviews found" }),
+        };
+      }
+      const body = {
+        data: commandOutput.Items,
+      };    
 
     // Return Response
     return {
